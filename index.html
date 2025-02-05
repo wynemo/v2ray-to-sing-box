@@ -12,6 +12,7 @@
             }
         </style>
         <script src="test.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     </head>
     <body>
         <textarea id="input" placeholder="请输入待转换的代理配置"></textarea>
@@ -19,6 +20,16 @@
         <textarea id="output" readonly></textarea>
 
         <script>
+            function isValidSubYAML(str) {
+                if (typeof str !== "string") return false;
+                try {
+                    const { proxies } = jsyaml.load(str);
+                    return !!proxies;
+                } catch {
+                    return false;
+                }
+            }
+
             // 判断是否为有效的Base64
             function isValidBase64(str) {
                 try {
@@ -40,8 +51,12 @@
                     let input = document.getElementById("input").value.trim();
                     let lines;
 
-                    // 判断是否为Base64编码
-                    if (isValidBase64(input)) {
+                    let proxies = [];
+
+                    if (isValidSubYAML(input)) {
+                        proxies = jsyaml.load(input).proxies;
+                        lines = [];
+                    } else if (isValidBase64(input)) {
                         lines = base64Decode(input)
                             .split("\n")
                             .filter((v) => v);
@@ -49,7 +64,6 @@
                         lines = input.split("\n").filter((v) => v);
                     }
 
-                    const proxies = [];
                     for (let line of lines) {
                         const schema = line.split("://")[0];
                         const protocol = protocolForClash[schema.toLowerCase()];
