@@ -1,0 +1,94 @@
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>代理转换</title>
+        <style>
+            textarea {
+                width: 100%;
+                height: 200px;
+            }
+            button {
+                margin: 10px 0;
+            }
+        </style>
+        <script src="test.js"></script>
+    </head>
+    <body>
+        <textarea id="input" placeholder="请输入待转换的代理配置"></textarea>
+        <button onclick="convert()">转换</button>
+        <textarea id="output" readonly></textarea>
+
+        <script>
+            // 判断是否为有效的Base64
+            function isValidBase64(str) {
+                try {
+                    return btoa(atob(str)) === str;
+                } catch (err) {
+                    return false;
+                }
+            }
+            // Base64解码
+            function base64Decode(str) {
+                try {
+                    return decodeURIComponent(escape(atob(str)));
+                } catch (err) {
+                    return atob(str);
+                }
+            }
+            function convert() {
+                try {
+                    let input = document.getElementById("input").value.trim();
+                    let lines;
+
+                    // 判断是否为Base64编码
+                    if (isValidBase64(input)) {
+                        lines = base64Decode(input)
+                            .split("\n")
+                            .filter((v) => v);
+                    } else {
+                        lines = input.split("\n").filter((v) => v);
+                    }
+
+                    const proxies = [];
+                    for (let line of lines) {
+                        const schema = line.split("://")[0];
+                        const protocol = protocolForClash[schema.toLowerCase()];
+                        if (!protocol) {
+                            console.log(`未支持的协议: ${schema}`);
+                            continue;
+                        }
+                        try {
+                            const proxy = protocol.parse(line);
+                            proxies.push(proxy);
+                        } catch (error) {
+                            console.log("解析错误:", error);
+                        }
+                    }
+
+                    const singbox_proxies = [];
+
+                    const protocolForSingBoxMap = protocolForSingBox();
+                    for (let proxy of proxies) {
+                        try {
+                            const _proxy =
+                                protocolForSingBoxMap[proxy.type](proxy);
+                            singbox_proxies.push(_proxy);
+                        } catch (error) {
+                            console.log("解析错误SingBox节点", error);
+                        }
+                    }
+
+                    console.log("singbox", singbox_proxies);
+
+                    document.getElementById("output").value = JSON.stringify(
+                        singbox_proxies,
+                        null,
+                        2,
+                    );
+                } catch (error) {
+                    console.error("转换失败:", error);
+                }
+            }
+        </script>
+    </body>
+</html>
