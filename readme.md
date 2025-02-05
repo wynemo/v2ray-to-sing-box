@@ -4,7 +4,7 @@
 
 下面也是AI写的，将就看吧
 
-可以直接下载使用，也可以访问 pages.cloudflare 使用
+可以直接下载使用，也可以访问 https://v2ray-to-sing-box.pages.dev/ 使用
 
 ## 项目介绍
 这是一个用于将 v2ray 格式的订阅配置转换为sing-box格式的Web工具。
