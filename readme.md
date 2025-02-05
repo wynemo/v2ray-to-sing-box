@@ -43,3 +43,13 @@
 
 ## License
 MIT
+
+## todo
+v2ray格式还有问题，有些节点转换不了，需要修复
+```
+解析错误SingBox节点 TypeError: Cannot read properties of undefined (reading 'length')
+    at wsParser (test.js:1126:18)
+    at Object.trojanParser [as trojan] (test.js:1585:31)
+    at convert (index.html:88:66)
+    at HTMLButtonElement.onclick (index.html:19:37)
+```
