@@ -23,7 +23,9 @@
             function isValidSubYAML(str) {
                 if (typeof str !== "string") return false;
                 try {
+                    //看是不是有proxies
                     const { proxies } = jsyaml.load(str);
+                    //双感叹号 `!!` 是一个常用的编程技巧，用来将一个值强制转换为布尔类型（boolean）
                     return !!proxies;
                 } catch {
                     return false;
@@ -54,13 +56,16 @@
                     let proxies = [];
 
                     if (isValidSubYAML(input)) {
+                        // 如果是yaml，认为是clash格式的
                         proxies = jsyaml.load(input).proxies;
                         lines = [];
                     } else if (isValidBase64(input)) {
+                        // 如果是base64，认为是v2ray格式的
                         lines = base64Decode(input)
                             .split("\n")
                             .filter((v) => v);
                     } else {
+                        // 如果是其他格式，认为是单行的节点信息
                         lines = input.split("\n").filter((v) => v);
                     }
 
