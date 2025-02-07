@@ -187,6 +187,7 @@ const getTrojanURIParser = () => {
           path: query.get("path"),
           headers: {
             "User-Agent": "",
+            Host: query.get("host"),
           },
         };
         trojan["ws-opts"] = wsOpts;
