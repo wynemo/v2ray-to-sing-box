@@ -48,3 +48,7 @@ v2ray可以是一行一行的节点信息，也可以是base64过的
 
 ## License
 MIT
+
+视频讲解：
+
+[![视频讲解](https://img.youtube.com/vi/9CnqlpCn4pw/0.jpg)](https://www.youtube.com/watch?v=9CnqlpCn4pw)
