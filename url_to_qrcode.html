@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL转二维码</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #qrcode {
+            margin-top: 30px;
+            text-align: center;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+        .error {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .success {
+            color: #27ae60;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>URL转二维码</h1>
+        
+        <div class="input-group">
+            <label for="urlInput">输入链接:</label>
+            <input type="text" id="urlInput" placeholder="请输入要转换的链接，例如：https://example.com">
+            <div id="errorMsg" class="error"></div>
+        </div>
+        
+        <button onclick="generateQRCode()">转换为二维码</button>
+        
+        <div id="qrcode"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+        let qrcode = null;
+        
+        function isValidURL(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+        
+        function generateQRCode() {
+            const urlInput = document.getElementById('urlInput');
+            const errorMsg = document.getElementById('errorMsg');
+            const qrcodeDiv = document.getElementById('qrcode');
+            const url = urlInput.value.trim();
+            
+            // 清除之前的错误信息
+            errorMsg.textContent = '';
+            
+            // 验证输入
+            if (!url) {
+                errorMsg.textContent = '请输入链接';
+                return;
+            }
+            
+            if (!isValidURL(url)) {
+                errorMsg.textContent = '请输入有效的链接格式';
+                return;
+            }
+            
+            // 清除之前的二维码
+            qrcodeDiv.innerHTML = '';
+            
+            try {
+                // 创建二维码
+                qrcode = new QRCode(qrcodeDiv, {
+                    text: url,
+                    width: 256,
+                    height: 256,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                
+                // 显示成功信息
+                setTimeout(() => {
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'success';
+                    successMsg.textContent = '二维码生成成功！';
+                    qrcodeDiv.appendChild(successMsg);
+                }, 100);
+                
+            } catch (error) {
+                errorMsg.textContent = '生成二维码时发生错误';
+                console.error('QR Code generation error:', error);
+            }
+        }
+        
+        // 回车键触发转换
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                generateQRCode();
+            }
+        });
+    </script>
+</body>
+</html>
