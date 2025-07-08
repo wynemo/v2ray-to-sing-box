@@ -70,6 +70,12 @@
             placeholder="Base64 解码结果"
             readonly
         ></textarea>
+        <p>URI 格式输出</p>
+        <textarea
+            id="uriOutput"
+            placeholder="URI 格式输出"
+            readonly
+        ></textarea>
 
         <script>
             function isValidSubYAML(str) {
@@ -98,6 +104,59 @@
                     return decodeURIComponent(escape(atob(str)));
                 } catch (err) {
                     return atob(str);
+                }
+            }
+            
+            // 简化的 URI 生成函数
+            function simpleGenerateURI(proxy) {
+                const name = encodeURIComponent(proxy.name || '');
+                
+                switch (proxy.type) {
+                    case 'vmess':
+                        const vmessConfig = {
+                            v: "2",
+                            ps: proxy.name || '',
+                            add: proxy.server,
+                            port: proxy.port,
+                            id: proxy.uuid,
+                            aid: proxy.alterId || 0,
+                            scy: proxy.cipher || 'auto',
+                            net: proxy.network || 'tcp',
+                            type: 'none',
+                            host: proxy['ws-opts']?.headers?.Host || proxy['http-opts']?.headers?.Host || '',
+                            path: proxy['ws-opts']?.path || proxy['http-opts']?.path || proxy['grpc-opts']?.['grpc-service-name'] || '',
+                            tls: proxy.tls ? 'tls' : '',
+                            sni: proxy.sni || ''
+                        };
+                        return `vmess://${btoa(JSON.stringify(vmessConfig))}`;
+                    
+                    case 'vless':
+                        const vlessParams = new URLSearchParams();
+                        if (proxy.tls) vlessParams.append('security', 'tls');
+                        if (proxy.sni) vlessParams.append('sni', proxy.sni);
+                        if (proxy.network && proxy.network !== 'tcp') vlessParams.append('type', proxy.network);
+                        if (proxy.flow) vlessParams.append('flow', proxy.flow);
+                        const vlessQuery = vlessParams.toString();
+                        return `vless://${proxy.uuid}@${proxy.server}:${proxy.port}${vlessQuery ? '?' + vlessQuery : ''}#${name}`;
+                    
+                    case 'trojan':
+                        const trojanParams = new URLSearchParams();
+                        if (proxy.sni) trojanParams.append('sni', proxy.sni);
+                        const trojanQuery = trojanParams.toString();
+                        return `trojan://${proxy.password}@${proxy.server}:${proxy.port}${trojanQuery ? '?' + trojanQuery : ''}#${name}`;
+                    
+                    case 'ss':
+                        const ssAuth = btoa(`${proxy.cipher}:${proxy.password}`);
+                        return `ss://${ssAuth}@${proxy.server}:${proxy.port}#${name}`;
+                    
+                    case 'hysteria2':
+                        const hy2Params = new URLSearchParams();
+                        if (proxy.sni) hy2Params.append('sni', proxy.sni);
+                        const hy2Query = hy2Params.toString();
+                        return `hysteria2://${proxy.password}@${proxy.server}:${proxy.port}${hy2Query ? '?' + hy2Query : ''}#${name}`;
+                    
+                    default:
+                        return null;
                 }
             }
             function convert() {
@@ -158,6 +217,20 @@
                         2,
                     );
                     document.getElementById("decodedOutput").value = decodedText;
+                    
+                    // 生成 URI 格式输出
+                    const uriLines = [];
+                    for (let proxy of proxies) {
+                        try {
+                            const uri = simpleGenerateURI(proxy);
+                            if (uri) {
+                                uriLines.push(uri);
+                            }
+                        } catch (error) {
+                            console.log("生成 URI 错误：", error);
+                        }
+                    }
+                    document.getElementById("uriOutput").value = uriLines.join('\n');
                 } catch (error) {
                     console.error("转换失败：", error);
                 }
