@@ -182,6 +182,7 @@
                     }
 
                     for (let line of lines) {
+                        line = line.trim();
                         const schema = line.split("://")[0];
                         const protocol = protocolForClash[schema.toLowerCase()];
                         if (!protocol) {
