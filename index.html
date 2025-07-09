@@ -220,18 +220,24 @@
                     document.getElementById("decodedOutput").value = decodedText;
                     
                     // 生成 URI 格式输出
-                    const uriLines = [];
-                    for (let proxy of proxies) {
-                        try {
-                            const uri = simpleGenerateURI(proxy);
-                            if (uri) {
-                                uriLines.push(uri);
+                    if (isValidBase64(document.getElementById("input").value.trim())) {
+                        // 如果输入是 Base64，直接使用解码后的结果
+                        document.getElementById("uriOutput").value = decodedText;
+                    } else {
+                        // 否则生成 URI 格式
+                        const uriLines = [];
+                        for (let proxy of proxies) {
+                            try {
+                                const uri = simpleGenerateURI(proxy);
+                                if (uri) {
+                                    uriLines.push(uri);
+                                }
+                            } catch (error) {
+                                console.log("生成 URI 错误：", error);
                             }
-                        } catch (error) {
-                            console.log("生成 URI 错误：", error);
                         }
+                        document.getElementById("uriOutput").value = uriLines.join('\n');
                     }
-                    document.getElementById("uriOutput").value = uriLines.join('\n');
                 } catch (error) {
                     console.error("转换失败：", error);
                 }
