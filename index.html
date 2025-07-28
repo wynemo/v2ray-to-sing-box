@@ -144,10 +144,35 @@
                     
                     case 'vless':
                         const vlessParams = new URLSearchParams();
-                        if (proxy.tls) vlessParams.append('security', 'tls');
-                        if (proxy.sni) vlessParams.append('sni', proxy.sni);
-                        if (proxy.network && proxy.network !== 'tcp') vlessParams.append('type', proxy.network);
-                        if (proxy.flow) vlessParams.append('flow', proxy.flow);
+                        if (proxy.tls) {
+                            // Check if this is a REALITY connection
+                            if (proxy['reality-opts']) {
+                                vlessParams.append('security', 'reality');
+                                vlessParams.append('pbk', proxy['reality-opts']['public-key']);
+                                vlessParams.append('sid', proxy['reality-opts']['short-id']);
+                                if (proxy['client-fingerprint']) {
+                                    vlessParams.append('fp', proxy['client-fingerprint']);
+                                }
+                                if (proxy.servername) {
+                                    vlessParams.append('sni', proxy.servername);
+                                }
+                            } else {
+                                // Standard TLS
+                                vlessParams.append('security', 'tls');
+                                if (proxy.sni) {
+                                    vlessParams.append('sni', proxy.sni);
+                                }
+                                if (proxy['client-fingerprint']) {
+                                    vlessParams.append('fp', proxy['client-fingerprint']);
+                                }
+                            }
+                        }
+                        if (proxy.network && proxy.network !== 'tcp') {
+                            vlessParams.append('type', proxy.network);
+                        }
+                        if (proxy.flow) {
+                            vlessParams.append('flow', proxy.flow);
+                        }
                         const vlessQuery = vlessParams.toString();
                         return `vless://${proxy.uuid}@${proxy.server}:${proxy.port}${vlessQuery ? '?' + vlessQuery : ''}#${name}`;
                     
