@@ -114,6 +114,11 @@
                 }
             }
             
+            // UTF-8 安全的 Base64 编码函数
+            function utf8ToBase64(str) {
+                return btoa(unescape(encodeURIComponent(str)));
+            }
+            
             // 简化的 URI 生成函数
             function simpleGenerateURI(proxy) {
                 const name = encodeURIComponent(proxy.name || '');
@@ -135,14 +140,39 @@
                             tls: proxy.tls ? 'tls' : '',
                             sni: proxy.sni || ''
                         };
-                        return `vmess://${btoa(JSON.stringify(vmessConfig))}`;
+                        return `vmess://${utf8ToBase64(JSON.stringify(vmessConfig))}`;
                     
                     case 'vless':
                         const vlessParams = new URLSearchParams();
-                        if (proxy.tls) vlessParams.append('security', 'tls');
-                        if (proxy.sni) vlessParams.append('sni', proxy.sni);
-                        if (proxy.network && proxy.network !== 'tcp') vlessParams.append('type', proxy.network);
-                        if (proxy.flow) vlessParams.append('flow', proxy.flow);
+                        if (proxy.tls) {
+                            // Check if this is a REALITY connection
+                            if (proxy['reality-opts']) {
+                                vlessParams.append('security', 'reality');
+                                vlessParams.append('pbk', proxy['reality-opts']['public-key']);
+                                vlessParams.append('sid', proxy['reality-opts']['short-id']);
+                                if (proxy['client-fingerprint']) {
+                                    vlessParams.append('fp', proxy['client-fingerprint']);
+                                }
+                                if (proxy.servername) {
+                                    vlessParams.append('sni', proxy.servername);
+                                }
+                            } else {
+                                // Standard TLS
+                                vlessParams.append('security', 'tls');
+                                if (proxy.sni) {
+                                    vlessParams.append('sni', proxy.sni);
+                                }
+                                if (proxy['client-fingerprint']) {
+                                    vlessParams.append('fp', proxy['client-fingerprint']);
+                                }
+                            }
+                        }
+                        if (proxy.network && proxy.network !== 'tcp') {
+                            vlessParams.append('type', proxy.network);
+                        }
+                        if (proxy.flow) {
+                            vlessParams.append('flow', proxy.flow);
+                        }
                         const vlessQuery = vlessParams.toString();
                         return `vless://${proxy.uuid}@${proxy.server}:${proxy.port}${vlessQuery ? '?' + vlessQuery : ''}#${name}`;
                     
@@ -153,7 +183,7 @@
                         return `trojan://${proxy.password}@${proxy.server}:${proxy.port}${trojanQuery ? '?' + trojanQuery : ''}#${name}`;
                     
                     case 'ss':
-                        const ssAuth = btoa(`${proxy.cipher}:${proxy.password}`);
+                        const ssAuth = utf8ToBase64(`${proxy.cipher}:${proxy.password}`);
                         return `ss://${ssAuth}@${proxy.server}:${proxy.port}#${name}`;
                     
                     case 'hysteria2':
