@@ -2,12 +2,12 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>Sing-box Shadowsocks JSON 转 URI</title>
+    <title>Sing-box JSON 转 URI</title>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         margin: 32px auto;
-        max-width: 900px;
+        max-width: 960px;
         line-height: 1.6;
         color: #111;
       }
@@ -21,7 +21,7 @@
       }
       textarea {
         width: 100%;
-        min-height: 200px;
+        min-height: 220px;
         padding: 12px;
         font-size: 14px;
         border: 1px solid #ccc;
@@ -57,19 +57,20 @@
     </style>
   </head>
   <body>
-    <h1>Sing-box Shadowsocks JSON 转 URI</h1>
+    <h1>Sing-box JSON 转 URI</h1>
     <p>
-      在下方粘贴 sing-box 导出的 Shadowsocks 节点 JSON（可为单个对象或对象数组），点击“转换”为
-      <code>ss://</code> URI。
+      支持 Shadowsocks / SSR / VMess / VLESS / Trojan / Hysteria / Hysteria2 /
+      TUIC / WireGuard 节点。直接粘贴 sing-box 导出的 JSON（单个对象或对象数组），点
+      “转换” 即可批量生成分享 URI。
     </p>
     <textarea
       id="jsonInput"
-      placeholder='例如：[{"type":"shadowsocks","tag":"例子","server":"1.2.3.4","server_port":443,"method":"aes-128-gcm","password":"pass"}]'
+      placeholder='例如：[{"type":"shadowsocks","tag":"示例","server":"1.2.3.4","server_port":443,"method":"aes-128-gcm","password":"pass"}]'
     ></textarea>
     <button id="convertBtn">转换</button>
     <textarea
       id="uriOutput"
-      placeholder="转换后的 ss:// URI 将显示在此"
+      placeholder="转换后的 URI 将显示在这里"
       readonly
     ></textarea>
     <div id="status" aria-live="polite"></div>
@@ -80,46 +81,364 @@
           try {
             return btoa(unescape(encodeURIComponent(str)));
           } catch (error) {
-            throw new Error("编码失败：请确认所有字段为有效的 UTF-8 文本");
+            throw new Error("Base64 编码失败：请确认字段均为 UTF-8 文本");
           }
         },
       };
 
+      const getPort = (node) => {
+        const port = Number(node.server_port ?? node.port);
+        if (!Number.isFinite(port)) {
+          throw new Error("端口无效");
+        }
+        return port;
+      };
+
+      const getTag = (node) => node.tag || node.name || "";
+      const getTagSuffix = (node) =>
+        getTag(node) ? `#${encodeURIComponent(getTag(node))}` : "";
+
+      const toCsv = (value) => {
+        if (value == null) return "";
+        if (Array.isArray(value)) {
+          return value
+            .map((item) => `${item}`.trim())
+            .filter((item) => item.length > 0)
+            .join(",");
+        }
+        return `${value}`.trim();
+      };
+
+      const extractHost = (transport = {}) => {
+        if (transport.headers?.Host) {
+          return toCsv(transport.headers.Host);
+        }
+        return toCsv(transport.host);
+      };
+
+      const normalizeType = (type = "") => {
+        const lower = `${type}`.toLowerCase();
+        const alias = {
+          ss: "shadowsocks",
+          ssr: "shadowsocksr",
+          hy2: "hysteria2",
+          wg: "wireguard",
+        };
+        return alias[lower] || lower;
+      };
+
+      const createQuery = (entries) => {
+        return entries
+          .filter(
+            ([, value]) =>
+              value !== undefined && value !== null && `${value}`.length > 0,
+          )
+          .map(
+            ([key, value]) =>
+              `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+          )
+          .join("&");
+      };
+
       const ssNodeToURI = (node) => {
-        if (!node || node.type !== "shadowsocks") {
-          throw new Error("仅支持 type 为 shadowsocks 的节点");
+        const { server, method, password, plugin, plugin_opts } = node;
+        const port = getPort(node);
+        if (!server || !method || !password) {
+          throw new Error("Shadowsocks 节点缺少 server / method / password");
         }
-        const {
-          server,
-          server_port,
+        const userInfo = Base64.encode(`${method}:${password}`);
+        let uri = `ss://${userInfo}@${server}:${port}`;
+        const query = createQuery([
+          plugin
+            ? [
+                "plugin",
+                plugin_opts
+                  ? `${plugin};${plugin_opts}`.replace(/;+$/, "")
+                  : plugin,
+              ]
+            : null,
+          node.udp_over_tcp ? ["uot", "1"] : null,
+          node.udp_fragment ? ["fop", "1"] : null,
+        ]);
+        if (query) uri += `?${query}`;
+        return `${uri}${getTagSuffix(node)}`;
+      };
+
+      const ssrNodeToURI = (node) => {
+        const port = getPort(node);
+        const { server, method, password, protocol, obfs } = node;
+        if (!server || !method || !password || !protocol || !obfs) {
+          throw new Error("SSR 节点缺少必要字段");
+        }
+        const payload = [
+          `${server}:${port}`,
+          protocol,
           method,
-          password,
-          plugin,
-          plugin_opts,
-          tag,
-        } = node;
-        if (!server || !server_port || !method || !password) {
-          throw new Error("缺少 Shadowsocks URI 所需的字段（server/port/method/password）");
+          obfs,
+          Base64.encode(password),
+        ].join(":");
+        const params = createQuery([
+          getTag(node) ? ["remarks", Base64.encode(getTag(node))] : null,
+          node.protocol_param
+            ? ["protoparam", Base64.encode(node.protocol_param)]
+            : null,
+          node.obfs_param
+            ? ["obfsparam", Base64.encode(node.obfs_param)]
+            : null,
+        ]);
+        const full = params ? `${payload}/?${params}` : payload;
+        return `ssr://${Base64.encode(full)}`;
+      };
+
+      const describeTransport = (node) => {
+        const transport = node.transport || {};
+        const type = transport.type || "";
+        if (type === "ws" || type === "httpupgrade") {
+          return {
+            net: type,
+            host: extractHost(transport),
+            path: transport.path || "/",
+          };
         }
-        const userInfo = `${method}:${password}`;
-        const userInfoBase64 = Base64.encode(userInfo);
-        let uri = `ss://${userInfoBase64}@${server}:${server_port}`;
-        const queryParts = [];
-        if (plugin) {
-          const pluginValue = plugin_opts
-            ? `${plugin};${plugin_opts}`.replace(/;+$/, "")
-            : plugin;
-          queryParts.push(`plugin=${encodeURIComponent(pluginValue)}`);
+        if (type === "http") {
+          const isHttp1 = Boolean(transport.method);
+          return {
+            net: isHttp1 ? "http" : "h2",
+            host: extractHost(transport),
+            path: transport.path || "/",
+          };
         }
-        if (node.udp_over_tcp) queryParts.push("uot=1");
-        if (node.udp_fragment) queryParts.push("fop=1");
-        if (queryParts.length) {
-          uri += `?${queryParts.join("&")}`;
+        if (type === "grpc") {
+          return {
+            net: "grpc",
+            serviceName: transport.service_name || "",
+          };
         }
-        if (tag) {
-          uri += `#${encodeURIComponent(tag)}`;
+        if (type) {
+          return { net: type };
         }
-        return uri;
+        return { net: "tcp" };
+      };
+
+      const vmessNodeToURI = (node) => {
+        const port = getPort(node);
+        if (!node.server || !node.uuid) {
+          throw new Error("VMess 节点缺少 server / uuid");
+        }
+        const { net, host, path, serviceName } = describeTransport(node);
+        const config = {
+          v: "2",
+          ps: getTag(node),
+          add: node.server,
+          port: `${port}`,
+          id: node.uuid,
+          aid: `${Number.isFinite(Number(node.alter_id))
+            ? Number(node.alter_id)
+            : 0}`,
+          scy: node.security || "auto",
+          net,
+          type: net === "http" ? "http" : "none",
+        };
+        if (host) config.host = host;
+        if (net === "grpc" && serviceName) {
+          config.path = serviceName;
+        } else if (path) {
+          config.path = path;
+        }
+        if (node.tls?.enabled) config.tls = "tls";
+        if (node.tls?.server_name) config.sni = node.tls.server_name;
+        if (node.tls?.alpn?.length) config.alpn = node.tls.alpn.join(",");
+        if (node.tls?.utls?.fingerprint)
+          config.fp = node.tls.utls.fingerprint;
+        if (node.tls?.insecure) config.allowInsecure = "1";
+        if (node.packet_encoding === "xudp")
+          config.packetEncoding = "xudp";
+        return `vmess://${Base64.encode(JSON.stringify(config))}`;
+      };
+
+      const buildTransportParams = (node) => {
+        const { net, host, path, serviceName } = describeTransport(node);
+        const params = [];
+        if (net && !["tcp", "none"].includes(net)) {
+          params.push(["type", net]);
+        }
+        if (host) params.push(["host", host]);
+        if (path) params.push(["path", path]);
+        if (serviceName) params.push(["serviceName", serviceName]);
+        return params;
+      };
+
+      const vlessNodeToURI = (node) => {
+        const port = getPort(node);
+        if (!node.server || !node.uuid) {
+          throw new Error("VLESS 节点缺少 server / uuid");
+        }
+        const tls = node.tls || {};
+        let security = "none";
+        if (tls.reality?.enabled) {
+          security = "reality";
+        } else if (tls.enabled) {
+          security = "tls";
+        }
+        const params = [
+          ["encryption", "none"],
+          security !== "none" ? ["security", security] : null,
+          tls.server_name ? ["sni", tls.server_name] : null,
+          tls.alpn?.length ? ["alpn", tls.alpn.join(",")] : null,
+          tls.utls?.fingerprint ? ["fp", tls.utls.fingerprint] : null,
+          tls.insecure ? ["allowInsecure", "1"] : null,
+          node.flow ? ["flow", node.flow] : null,
+          ...buildTransportParams(node),
+        ];
+        if (security === "reality") {
+          if (tls.reality?.public_key)
+            params.push(["pbk", tls.reality.public_key]);
+          if (tls.reality?.short_id)
+            params.push(["sid", tls.reality.short_id]);
+        }
+        const query = createQuery(params);
+        return `vless://${encodeURIComponent(node.uuid)}@${node.server}:${port}${
+          query ? `?${query}` : ""
+        }${getTagSuffix(node)}`;
+      };
+
+      const trojanNodeToURI = (node) => {
+        const port = getPort(node);
+        if (!node.server || !node.password) {
+          throw new Error("Trojan 节点缺少 server / password");
+        }
+        const tls = node.tls || {};
+        const params = [
+          ["security", "tls"],
+          tls.server_name ? ["sni", tls.server_name] : null,
+          tls.insecure ? ["allowInsecure", "1"] : null,
+          tls.alpn?.length ? ["alpn", tls.alpn.join(",")] : null,
+          tls.utls?.fingerprint ? ["fp", tls.utls.fingerprint] : null,
+          ...buildTransportParams(node),
+        ];
+        const query = createQuery(params);
+        return `trojan://${encodeURIComponent(node.password)}@${
+          node.server
+        }:${port}${query ? `?${query}` : ""}${getTagSuffix(node)}`;
+      };
+
+      const hysteria2NodeToURI = (node) => {
+        const port = getPort(node);
+        if (!node.server || !node.password) {
+          throw new Error("Hysteria2 节点缺少 server / password");
+        }
+        const tls = node.tls || {};
+        const params = [
+          ["sni", tls.server_name],
+          tls.insecure ? ["insecure", "1"] : null,
+          node.ports ? ["mport", node.ports] : null,
+          node.up_mbps ? ["up", node.up_mbps] : null,
+          node.down_mbps ? ["down", node.down_mbps] : null,
+          node.tcp_fast_open ? ["fastopen", "1"] : null,
+          node.obfs?.type ? ["obfs", node.obfs.type] : null,
+          node.obfs?.password ? ["obfs-password", node.obfs.password] : null,
+        ];
+        const query = createQuery(params);
+        return `hysteria2://${encodeURIComponent(node.password)}@${
+          node.server
+        }:${port}${query ? `?${query}` : ""}${getTagSuffix(node)}`;
+      };
+
+      const hysteriaNodeToURI = (node) => {
+        const port = getPort(node);
+        if (!node.server) {
+          throw new Error("Hysteria 节点缺少 server");
+        }
+        const tls = node.tls || {};
+        const params = [
+          node.auth_str ? ["auth", node.auth_str] : null,
+          tls.server_name ? ["peer", tls.server_name] : null,
+          tls.insecure ? ["insecure", "1"] : null,
+          tls.alpn?.length ? ["alpn", tls.alpn.join(",")] : null,
+          node.ports ? ["mport", node.ports] : null,
+          node.protocol ? ["protocol", node.protocol] : null,
+          node.obfs ? ["obfsParam", node.obfs] : null,
+          node._obfs ? ["obfs", node._obfs] : null,
+          node.up ?? node.up_mbps ? ["upmbps", node.up ?? node.up_mbps] : null,
+          node.down ?? node.down_mbps
+            ? ["downmbps", node.down ?? node.down_mbps]
+            : null,
+          node.recv_window ? ["recv_window", node.recv_window] : null,
+          node.recv_window_conn
+            ? ["recv_window_conn", node.recv_window_conn]
+            : null,
+          node.tcp_fast_open ? ["fastopen", "1"] : null,
+        ];
+        const query = createQuery(params);
+        return `hysteria://${node.server}:${port}${
+          query ? `?${query}` : ""
+        }${getTagSuffix(node)}`;
+      };
+
+      const tuicNodeToURI = (node) => {
+        const port = getPort(node);
+        if (!node.server || !node.password || !node.uuid) {
+          throw new Error("TUIC 节点缺少 server / uuid / password");
+        }
+        const tls = node.tls || {};
+        const params = [
+          tls.alpn?.length ? ["alpn", tls.alpn.join(",")] : null,
+          tls.insecure ? ["allow-insecure", "1"] : null,
+          tls.disable_sni ? ["disable-sni", "1"] : null,
+          node.zero_rtt_handshake ? ["reduce-rtt", "1"] : null,
+          node.udp_over_stream ? ["udp-over-stream", "1"] : null,
+          node.congestion_control
+            ? ["congestion-control", node.congestion_control]
+            : null,
+          node.udp_relay_mode
+            ? ["udp-relay-mode", node.udp_relay_mode]
+            : null,
+          node.heartbeat ? ["heartbeat-interval", node.heartbeat] : null,
+          node.token ? ["token", node.token] : null,
+        ];
+        const query = createQuery(params);
+        return `tuic://${encodeURIComponent(node.uuid)}:${encodeURIComponent(
+          node.password,
+        )}@${node.server}:${port}${query ? `?${query}` : ""}${getTagSuffix(
+          node,
+        )}`;
+      };
+
+      const wireguardNodeToURI = (node) => {
+        const port = getPort(node);
+        const key = node.private_key || node["private-key"];
+        if (!node.server || !key) {
+          throw new Error("WireGuard 节点缺少 server / private_key");
+        }
+        const params = [
+          node.peer_public_key ? ["publickey", node.peer_public_key] : null,
+          node.pre_shared_key ? ["preshared-key", node.pre_shared_key] : null,
+          node.local_address?.length
+            ? ["address", node.local_address.join(",")]
+            : null,
+          node.mtu ? ["mtu", node.mtu] : null,
+          node.keepalive ? ["keepalive", node.keepalive] : null,
+          Array.isArray(node.reserved) && node.reserved.length === 3
+            ? ["reserved", node.reserved.join(",")]
+            : null,
+          node.udp === false ? ["udp", "0"] : null,
+        ];
+        const query = createQuery(params);
+        return `wireguard://${encodeURIComponent(key)}@${node.server}:${port}${
+          query ? `?${query}` : ""
+        }${getTagSuffix(node)}`;
+      };
+
+      const serializers = {
+        shadowsocks: ssNodeToURI,
+        shadowsocksr: ssrNodeToURI,
+        vmess: vmessNodeToURI,
+        vless: vlessNodeToURI,
+        trojan: trojanNodeToURI,
+        hysteria: hysteriaNodeToURI,
+        hysteria2: hysteria2NodeToURI,
+        tuic: tuicNodeToURI,
+        wireguard: wireguardNodeToURI,
       };
 
       const normalizeInput = (text) => {
@@ -131,8 +450,18 @@
         throw new Error("输入需要是对象或对象数组");
       };
 
+      const convertNode = (node) => {
+        const type = normalizeType(node.type);
+        const serializer = serializers[type];
+        if (!serializer) {
+          throw new Error(`暂不支持的节点类型：${node.type || "未知"}`);
+        }
+        return serializer(node);
+      };
+
       document.getElementById("convertBtn").addEventListener("click", () => {
         const status = document.getElementById("status");
+        const output = document.getElementById("uriOutput");
         status.className = "";
         status.textContent = "";
         try {
@@ -140,14 +469,30 @@
             document.getElementById("jsonInput").value,
           );
           if (!nodes.length) {
-            document.getElementById("uriOutput").value = "";
-            status.textContent = "请输入 sing-box Shadowsocks 节点 JSON";
+            output.value = "";
+            status.textContent = "请输入 sing-box 节点 JSON";
             return;
           }
-          const uris = nodes.map(ssNodeToURI);
-          document.getElementById("uriOutput").value = uris.join("\n");
-          status.className = "success";
-          status.textContent = `转换成功，共 ${uris.length} 条`;
+          const uris = [];
+          const errors = [];
+          nodes.forEach((node, index) => {
+            try {
+              uris.push(convertNode(node));
+            } catch (error) {
+              const label = node?.tag || node?.type || `第 ${index + 1} 条`;
+              errors.push(`${label}: ${error.message}`);
+            }
+          });
+          output.value = uris.join("\n");
+          if (errors.length) {
+            status.className = uris.length ? "error" : "error";
+            status.textContent = `已成功 ${uris.length} 条，失败 ${errors.length} 条：${errors.join(
+              "；",
+            )}`;
+          } else {
+            status.className = "success";
+            status.textContent = `转换成功，共 ${uris.length} 条`;
+          }
         } catch (error) {
           document.getElementById("uriOutput").value = "";
           status.className = "error";
