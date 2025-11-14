@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sing-box Shadowsocks JSON 转 URI</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 32px auto;
+        max-width: 900px;
+        line-height: 1.6;
+        color: #111;
+      }
+      h1 {
+        margin-bottom: 8px;
+        font-size: 28px;
+      }
+      p {
+        margin-top: 0;
+        color: #555;
+      }
+      textarea {
+        width: 100%;
+        min-height: 200px;
+        padding: 12px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-sizing: border-box;
+        resize: vertical;
+      }
+      button {
+        margin: 16px 0;
+        padding: 10px 24px;
+        background-color: #0066ff;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #status {
+        min-height: 20px;
+        margin-top: 8px;
+        font-size: 14px;
+      }
+      #status.error {
+        color: #d93025;
+      }
+      #status.success {
+        color: #137333;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sing-box Shadowsocks JSON 转 URI</h1>
+    <p>
+      在下方粘贴 sing-box 导出的 Shadowsocks 节点 JSON（可为单个对象或对象数组），点击“转换”为
+      <code>ss://</code> URI。
+    </p>
+    <textarea
+      id="jsonInput"
+      placeholder='例如：[{"type":"shadowsocks","tag":"例子","server":"1.2.3.4","server_port":443,"method":"aes-128-gcm","password":"pass"}]'
+    ></textarea>
+    <button id="convertBtn">转换</button>
+    <textarea
+      id="uriOutput"
+      placeholder="转换后的 ss:// URI 将显示在此"
+      readonly
+    ></textarea>
+    <div id="status" aria-live="polite"></div>
+
+    <script>
+      const Base64 = {
+        encode(str) {
+          try {
+            return btoa(unescape(encodeURIComponent(str)));
+          } catch (error) {
+            throw new Error("编码失败：请确认所有字段为有效的 UTF-8 文本");
+          }
+        },
+      };
+
+      const ssNodeToURI = (node) => {
+        if (!node || node.type !== "shadowsocks") {
+          throw new Error("仅支持 type 为 shadowsocks 的节点");
+        }
+        const {
+          server,
+          server_port,
+          method,
+          password,
+          plugin,
+          plugin_opts,
+          tag,
+        } = node;
+        if (!server || !server_port || !method || !password) {
+          throw new Error("缺少 Shadowsocks URI 所需的字段（server/port/method/password）");
+        }
+        const userInfo = `${method}:${password}`;
+        const userInfoBase64 = Base64.encode(userInfo);
+        let uri = `ss://${userInfoBase64}@${server}:${server_port}`;
+        const queryParts = [];
+        if (plugin) {
+          const pluginValue = plugin_opts
+            ? `${plugin};${plugin_opts}`.replace(/;+$/, "")
+            : plugin;
+          queryParts.push(`plugin=${encodeURIComponent(pluginValue)}`);
+        }
+        if (node.udp_over_tcp) queryParts.push("uot=1");
+        if (node.udp_fragment) queryParts.push("fop=1");
+        if (queryParts.length) {
+          uri += `?${queryParts.join("&")}`;
+        }
+        if (tag) {
+          uri += `#${encodeURIComponent(tag)}`;
+        }
+        return uri;
+      };
+
+      const normalizeInput = (text) => {
+        const trimmed = text.trim();
+        if (!trimmed) return [];
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+        if (typeof parsed === "object") return [parsed];
+        throw new Error("输入需要是对象或对象数组");
+      };
+
+      document.getElementById("convertBtn").addEventListener("click", () => {
+        const status = document.getElementById("status");
+        status.className = "";
+        status.textContent = "";
+        try {
+          const nodes = normalizeInput(
+            document.getElementById("jsonInput").value,
+          );
+          if (!nodes.length) {
+            document.getElementById("uriOutput").value = "";
+            status.textContent = "请输入 sing-box Shadowsocks 节点 JSON";
+            return;
+          }
+          const uris = nodes.map(ssNodeToURI);
+          document.getElementById("uriOutput").value = uris.join("\n");
+          status.className = "success";
+          status.textContent = `转换成功，共 ${uris.length} 条`;
+        } catch (error) {
+          document.getElementById("uriOutput").value = "";
+          status.className = "error";
+          status.textContent = error.message || "转换失败";
+        }
+      });
+    </script>
+  </body>
+</html>
