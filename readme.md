@@ -16,7 +16,7 @@ v2ray可以是一行一行的节点信息，也可以是base64过的
 
 ## 使用方法
 
-可以直接下载打开 index.html 使用，也可以访问 https://v2ray-to-sing-box.pages.dev/ 使用
+可以直接下载打开 index.html 使用，也可以访问 https://singbox-to-uri.pages.dev/ 使用
 所有转换都是在本地或浏览器进行的，不会上传到服务器 你可以放心使用 也可以检查代码
 
 1. 在输入框中粘贴需要转换的代理配置(支持Base64)
