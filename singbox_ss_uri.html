@@ -130,8 +130,11 @@
       const createQuery = (entries) => {
         return entries
           .filter(
-            ([, value]) =>
-              value !== undefined && value !== null && `${value}`.length > 0,
+            (entry) =>
+              entry != null &&
+              entry[1] !== undefined &&
+              entry[1] !== null &&
+              `${entry[1]}`.length > 0,
           )
           .map(
             ([key, value]) =>
