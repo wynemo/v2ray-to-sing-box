@@ -1,0 +1,307 @@
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Sing-box 完整配置生成器</title>
+        <style>
+            body {
+                font-family: sans-serif;
+                margin: 20px;
+            }
+            .header-link {
+                float: right;
+                margin-bottom: 20px;
+            }
+            .header-link a {
+                display: flex;
+                align-items: center;
+                text-decoration: none;
+                color: #000;
+            }
+            .header-link img {
+                margin-right: 5px;
+            }
+            textarea {
+                width: 100%;
+                height: 200px;
+                margin-bottom: 10px;
+                padding: 10px;
+                box-sizing: border-box;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                clear: both;
+            }
+            #output {
+                height: 400px;
+            }
+            button {
+                margin: 10px 0;
+                padding: 10px 20px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: #0056b3;
+            }
+            p {
+                margin-top: 20px;
+                margin-bottom: 5px;
+                font-weight: bold;
+            }
+            .version-select {
+                margin-bottom: 15px;
+            }
+            .version-select label {
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            .version-select select {
+                padding: 8px 12px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            .status {
+                margin: 10px 0;
+                padding: 10px;
+                border-radius: 4px;
+                display: none;
+            }
+            .status.error {
+                background-color: #f8d7da;
+                color: #721c24;
+                display: block;
+            }
+            .status.success {
+                background-color: #d4edda;
+                color: #155724;
+                display: block;
+            }
+        </style>
+        <script src="test.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    </head>
+    <body>
+        <div style="margin-bottom: 20px; overflow: hidden;">
+            <div style="float: left;">
+                <a href="index.html" style="text-decoration: none; color: #007bff;">
+                    << 返回首页
+                </a>
+                <a href="url_to_qrcode.html" style="text-decoration: none; color: #007bff; margin-left: 20px;">
+                    二维码生成器
+                </a>
+                <a href="singbox_ss_uri.html" style="text-decoration: none; color: #007bff; margin-left: 20px;">
+                    Sing-box JSON转URI
+                </a>
+            </div>
+            <div class="header-link">
+                <a href="https://github.com/wynemo/v2ray-to-sing-box" target="_blank">
+                    <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" width="30" height="30">
+                    v2ray-to-sing-box
+                </a>
+            </div>
+        </div>
+
+        <h2>Sing-box 完整配置生成器</h2>
+        <p style="font-weight: normal; color: #666;">
+            输入 Clash YAML 或 Base64 编码的 v2ray 订阅，生成包含 DNS、路由规则、出站分组的完整 Sing-box 配置。
+            节点会自动按地区（港/台/日/新/美）分组。
+        </p>
+
+        <div class="version-select">
+            <label for="version">选择版本：</label>
+            <select id="version">
+                <option value="1.12">Sing-box 1.12</option>
+            </select>
+        </div>
+
+        <textarea
+            id="input"
+            placeholder="请输入 Clash YAML 配置或 Base64 编码的 v2ray 订阅链接"
+        ></textarea>
+        <button onclick="convert()">生成完整配置</button>
+        <button onclick="copyOutput()" style="background-color: #28a745;">复制结果</button>
+
+        <div id="status" class="status"></div>
+
+        <p>完整 Sing-box 配置</p>
+        <textarea id="output" readonly></textarea>
+
+        <script>
+            // 缓存已加载的版本配置
+            const versionCache = {};
+
+            function isValidSubYAML(str) {
+                if (typeof str !== "string") return false;
+                try {
+                    const { proxies } = jsyaml.load(str);
+                    return !!proxies;
+                } catch {
+                    return false;
+                }
+            }
+
+            function isValidBase64(str) {
+                try {
+                    return btoa(atob(str)) === str;
+                } catch (err) {
+                    return false;
+                }
+            }
+
+            function base64Decode(str) {
+                try {
+                    return decodeURIComponent(escape(atob(str)));
+                } catch (err) {
+                    return atob(str);
+                }
+            }
+
+            function showStatus(message, isError = false) {
+                const status = document.getElementById("status");
+                status.textContent = message;
+                status.className = "status " + (isError ? "error" : "success");
+            }
+
+            function hideStatus() {
+                document.getElementById("status").className = "status";
+            }
+
+            async function loadVersionConfig(version) {
+                if (versionCache[version]) {
+                    return versionCache[version];
+                }
+
+                try {
+                    // 加载配置模板
+                    const templateResponse = await fetch(`${version}/sing-box.json`);
+                    if (!templateResponse.ok) {
+                        throw new Error(`无法加载版本 ${version} 的配置模板`);
+                    }
+                    const template = await templateResponse.json();
+
+                    // 加载处理脚本
+                    const scriptResponse = await fetch(`${version}/sing-box.js`);
+                    if (!scriptResponse.ok) {
+                        throw new Error(`无法加载版本 ${version} 的处理脚本`);
+                    }
+                    const scriptText = await scriptResponse.text();
+
+                    // 创建独立的函数作用域来执行脚本
+                    const processConfigFunc = new Function(
+                        scriptText + '; return { processConfig, getTags };'
+                    )();
+
+                    versionCache[version] = {
+                        template,
+                        processConfig: processConfigFunc.processConfig
+                    };
+
+                    return versionCache[version];
+                } catch (error) {
+                    throw new Error(`加载版本 ${version} 失败: ${error.message}`);
+                }
+            }
+
+            async function convert() {
+                hideStatus();
+                try {
+                    const input = document.getElementById("input").value.trim();
+                    if (!input) {
+                        showStatus("请输入订阅内容", true);
+                        return;
+                    }
+
+                    const version = document.getElementById("version").value;
+
+                    // 加载版本配置
+                    const versionConfig = await loadVersionConfig(version);
+
+                    // 解析输入
+                    let lines = [];
+                    let proxies = [];
+
+                    if (isValidSubYAML(input)) {
+                        proxies = jsyaml.load(input).proxies;
+                    } else if (isValidBase64(input)) {
+                        const decodedText = base64Decode(input);
+                        lines = decodedText.split("\n").filter((v) => v);
+                    } else {
+                        lines = input.split("\n").filter((v) => v);
+                    }
+
+                    // 解析 URI 为代理对象
+                    for (let line of lines) {
+                        line = line.trim();
+                        if (!line) continue;
+                        const schema = line.split("://")[0];
+                        const protocol = protocolForClash[schema.toLowerCase()];
+                        if (!protocol) {
+                            console.log(`未支持的协议：${schema}`);
+                            continue;
+                        }
+                        try {
+                            const proxy = protocol.parse(line);
+                            proxies.push(proxy);
+                        } catch (error) {
+                            console.log("解析错误：", error);
+                        }
+                    }
+
+                    if (proxies.length === 0) {
+                        showStatus("未能解析出任何有效节点", true);
+                        return;
+                    }
+
+                    // 转换为 sing-box 格式
+                    const singbox_proxies = [];
+                    const protocolForSingBoxMap = protocolForSingBox();
+
+                    for (let proxy of proxies) {
+                        try {
+                            const _proxy = protocolForSingBoxMap[proxy.type](proxy);
+                            singbox_proxies.push(_proxy);
+                        } catch (error) {
+                            console.log("转换 SingBox 节点失败", error);
+                        }
+                    }
+
+                    if (singbox_proxies.length === 0) {
+                        showStatus("节点转换失败，请检查输入格式", true);
+                        return;
+                    }
+
+                    // 使用版本脚本处理配置
+                    const fullConfig = versionConfig.processConfig(
+                        singbox_proxies,
+                        versionConfig.template
+                    );
+
+                    document.getElementById("output").value = JSON.stringify(
+                        fullConfig,
+                        null,
+                        2
+                    );
+
+                    showStatus(`成功生成配置，共 ${singbox_proxies.length} 个节点`);
+                } catch (error) {
+                    console.error("转换失败：", error);
+                    showStatus("转换失败：" + error.message, true);
+                }
+            }
+
+            function copyOutput() {
+                const output = document.getElementById("output");
+                if (!output.value) {
+                    showStatus("没有可复制的内容", true);
+                    return;
+                }
+                output.select();
+                document.execCommand("copy");
+                showStatus("已复制到剪贴板");
+            }
+        </script>
+    </body>
+</html>
