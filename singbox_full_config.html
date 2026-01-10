@@ -119,7 +119,10 @@
 
         <textarea
             id="input"
-            placeholder="请输入 Clash YAML 配置或 Base64 编码的 v2ray 订阅链接"
+            placeholder="支持以下格式：
+1. Clash YAML 配置
+2. Base64 编码的 v2ray 订阅
+3. 多行 URI（每行一个节点，支持 ss/ssr/vmess/vless/trojan/hysteria/hysteria2/tuic/wireguard）"
         ></textarea>
         <button onclick="convert()">生成完整配置</button>
         <button onclick="copyOutput()" style="background-color: #28a745;">复制结果</button>
