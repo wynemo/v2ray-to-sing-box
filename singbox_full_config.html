@@ -148,7 +148,11 @@
 
             function isValidBase64(str) {
                 try {
-                    return btoa(atob(str)) === str;
+                    // 添加 padding（如果需要）
+                    const padded = str + '='.repeat((4 - str.length % 4) % 4);
+                    const decoded = atob(padded);
+                    // 检查解码后的内容是否包含 URI 协议标识
+                    return /^(ss|ssr|vmess|vless|trojan|hysteria|hysteria2|tuic|wireguard):\/\//i.test(decoded);
                 } catch (err) {
                     return false;
                 }
@@ -156,9 +160,17 @@
 
             function base64Decode(str) {
                 try {
-                    return decodeURIComponent(escape(atob(str)));
+                    // 自动添加缺失的 padding
+                    const padded = str + '='.repeat((4 - str.length % 4) % 4);
+                    const decoded = atob(padded);
+                    return decodeURIComponent(escape(decoded));
                 } catch (err) {
-                    return atob(str);
+                    try {
+                        const padded = str + '='.repeat((4 - str.length % 4) % 4);
+                        return atob(padded);
+                    } catch (err2) {
+                        return str;
+                    }
                 }
             }
 
