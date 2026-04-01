@@ -109,8 +109,8 @@
                     // 添加 padding（如果需要）
                     const padded = str + '='.repeat((4 - str.length % 4) % 4);
                     const decoded = atob(padded);
-                    // 检查解码后的内容是否包含 URI 协议标识
-                    return /^(ss|ssr|vmess|vless|trojan|hysteria|hysteria2|tuic|wireguard):\/\//i.test(decoded);
+                    // 检查解码后的内容是否包含 URI 协议标识（任意一行匹配即可）
+                    return /(^|\n)(ss|ssr|vmess|vless|trojan|hysteria|hysteria2|tuic|wireguard):\/\//im.test(decoded);
                 } catch (err) {
                     return false;
                 }
